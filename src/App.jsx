@@ -1,54 +1,90 @@
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import InputWithLabel from "./components/InputWithLabel";
 import List from "./components/List";
 
 import "./App.css";
+const storiesReducer = (state, action) => {
+  // console.log(state, action);
 
+  switch (action.type) {
+    case "STORIES_FETCH_INIT":
+      return {
+        ...state,
+        isLoading: true,
+        // hasError: false,
+      };
+    case "STORIES_FETCH_SUCCESS":
+      return {
+        ...state,
+        isLoading: false,
+        hasError: false,
+        data: action.payload,
+      };
+    case "STORIES_FETCH_FAILURE":
+      return {
+        ...state,
+        isLoading: false,
+        hasError: true,
+      };
+    case "REMOVE_STORY":
+      return {
+        ...state,
+        data: state.data.filter(
+          (story) => story.objectID !== action.payload.objectID
+        ),
+      };
+    default:
+      throw new Error();
+  }
+};
+// const getAsyncStories = () => {
+//   return new Promise((resolve) =>
+//     setTimeout(() => resolve({ data: { stories: initialStories } }), 2000)
+//   );
+// };
+const API_ENDPOINT = "https://hn.algolia.com/api/v1/search?query=";
 function App() {
-  const initialStories = [
-    {
-      title: "React",
-      url: "https://reactjs.org/",
-      author: "Jordan Walke",
-      num_comments: 3,
-      points: 4,
-      objectID: 0,
-    },
-    {
-      title: "Redux",
-      url: "https://redux.js.org/",
-      author: "Dan Abramov, Andrew Clark",
-      num_comments: 2,
-      points: 5,
-      objectID: 1,
-    },
-    {
-      title: "JavaScript",
-      url: "https://redux.js.org/",
-      author: "Dan Abramov, Hla Clark",
-      num_comments: 2,
-      points: 5,
-      objectID: 2,
-    },
-  ];
   const [query, setQuery] = useStorageState("search", "");
+  const [stories, dispatchStories] = useReducer(storiesReducer, {
+    data: [],
+    isLoading: false,
+    hasError: false,
+  });
+
+  useEffect(() => {
+    if (!query) {
+      return;
+    }
+    dispatchStories({
+      type: "STORIES_FETCH_INIT",
+    });
+
+    fetch(`${API_ENDPOINT}${query}`)
+      .then((res) => res.json())
+      .then((res) => {
+        dispatchStories({
+          type: "STORIES_FETCH_SUCCESS",
+          payload: res.hits,
+        });
+      })
+      .catch(() => dispatchStories({ type: "STORIES_FETCH_FAILURE" }));
+  }, [query]);
+  function handleRemoveStory(item) {
+    dispatchStories({
+      type: "REMOVE_STORY",
+      payload: item,
+    });
+  }
   function handleChange(e) {
     setQuery(e.target.value);
   }
-  const [stories, setStories] = useState(initialStories);
 
-  function handleRemoveStory(item) {
-    const newStories = stories.filter(
-      (story) => story.objectID !== item.objectID
-    );
-    setStories(newStories);
-  }
   //custom hook
   // usestorageState
 
-  const searchedStories = stories.filter((story) => {
-    return story.title.toLowerCase().includes(query.toLowerCase());
-  });
+  // const searchedStories = stories.data.filter((story) => {
+  //   return story.title.toLowerCase().includes(query.toLowerCase());
+  // });
 
   return (
     <div>
@@ -63,7 +99,13 @@ function App() {
       </InputWithLabel>
 
       <hr />
-      <List stories={searchedStories} onRemoveItem={handleRemoveStory} />
+      {stories.hasError && <p>Something was worng ...</p>}
+
+      {stories.isLoading ? (
+        <p>Loading....</p>
+      ) : (
+        <List stories={stories.data} onRemoveItem={handleRemoveStory} />
+      )}
       {/* <User user={user} /> */}
     </div>
   );

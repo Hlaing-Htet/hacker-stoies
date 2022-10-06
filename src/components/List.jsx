@@ -5,7 +5,7 @@ function List({ stories, onRemoveItem }) {
     <ul>
       {stories.map((item) => {
         return (
-          <Item item={item} key={item.author} onRemoveItem={onRemoveItem} />
+          <Item item={item} key={item.created_at} onRemoveItem={onRemoveItem} />
         );
       })}
     </ul>
