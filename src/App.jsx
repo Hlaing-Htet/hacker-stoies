@@ -1,32 +1,42 @@
-import { useEffect, useReducer, useState } from "react";
-import InputWithLabel from "./components/InputWithLabel";
+import { SeachForm } from "./components/SeachForm";
+import styled from "styled-components";
+import { useEffect, useReducer, useState, useCallback, useRef } from "react";
+import axios from "axios";
+
 import List from "./components/List";
 
-import "./App.css";
+// import styles from "./App.module.css";
+
+const ACTIONS = {
+  INIT: "STORIES_FETCH_INIT",
+  SUCCESS: "STORIES_FETCH_SUCCESS",
+  FAILURE: "STORIES_FETCH_FAILURE",
+  REMOVE: "REMOVE_STORY",
+};
 const storiesReducer = (state, action) => {
   // console.log(state, action);
 
   switch (action.type) {
-    case "STORIES_FETCH_INIT":
+    case ACTIONS.INIT:
       return {
         ...state,
         isLoading: true,
         // hasError: false,
       };
-    case "STORIES_FETCH_SUCCESS":
+    case ACTIONS.SUCCESS:
       return {
         ...state,
         isLoading: false,
         hasError: false,
         data: action.payload,
       };
-    case "STORIES_FETCH_FAILURE":
+    case ACTIONS.FAILURE:
       return {
         ...state,
         isLoading: false,
         hasError: true,
       };
-    case "REMOVE_STORY":
+    case ACTIONS.REMOVE:
       return {
         ...state,
         data: state.data.filter(
@@ -37,11 +47,7 @@ const storiesReducer = (state, action) => {
       throw new Error();
   }
 };
-// const getAsyncStories = () => {
-//   return new Promise((resolve) =>
-//     setTimeout(() => resolve({ data: { stories: initialStories } }), 2000)
-//   );
-// };
+
 const API_ENDPOINT = "https://hn.algolia.com/api/v1/search?query=";
 function App() {
   const [query, setQuery] = useStorageState("search", "");
@@ -50,35 +56,44 @@ function App() {
     isLoading: false,
     hasError: false,
   });
-
-  useEffect(() => {
+  const [url, setUrl] = useState(`${API_ENDPOINT}${query}`);
+  //* memoized
+  //* useCallback
+  const fetchStories = useCallback(async () => {
     if (!query) {
       return;
     }
     dispatchStories({
-      type: "STORIES_FETCH_INIT",
+      type: ACTIONS.INIT,
     });
+    try {
+      const res = await axios.get(url);
+      dispatchStories({
+        type: ACTIONS.SUCCESS,
+        payload: res.data.hits,
+      });
+    } catch {
+      dispatchStories({ type: ACTIONS.FAILURE });
+    }
+    // .catch(() => );
+  }, [url]);
 
-    fetch(`${API_ENDPOINT}${query}`)
-      .then((res) => res.json())
-      .then((res) => {
-        dispatchStories({
-          type: "STORIES_FETCH_SUCCESS",
-          payload: res.hits,
-        });
-      })
-      .catch(() => dispatchStories({ type: "STORIES_FETCH_FAILURE" }));
-  }, [query]);
-  function handleRemoveStory(item) {
+  useEffect(() => {
+    fetchStories();
+  }, [fetchStories]);
+  const handleRemoveStory = useCallback((item) => {
     dispatchStories({
-      type: "REMOVE_STORY",
+      type: ACTIONS.REMOVE,
       payload: item,
     });
-  }
-  function handleChange(e) {
+  }, []);
+  function handleSearchInput(e) {
     setQuery(e.target.value);
   }
-
+  function handleSearchSubmit(event) {
+    event.preventDefault();
+    setUrl(`${API_ENDPOINT}${query}`);
+  }
   //custom hook
   // usestorageState
 
@@ -86,17 +101,23 @@ function App() {
   //   return story.title.toLowerCase().includes(query.toLowerCase());
   // });
 
+  const StyledContainer = styled.div`
+    padding: 1em;
+    background-color: #eee;
+    height: 100vh;
+  `;
+  const StyledHeadLine = styled.h1`
+    font-size: 3rem;
+    font-weight: 300;
+  `;
   return (
-    <div>
-      <h1>My Hacker News</h1>
-      <InputWithLabel
-        id="search"
-        value={query}
-        onChange={handleChange}
-        isFocus={true}
-      >
-        Search
-      </InputWithLabel>
+    <StyledContainer>
+      <StyledHeadLine>My Hacker News</StyledHeadLine>
+      <SeachForm
+        handleSearchSubmit={handleSearchSubmit}
+        query={query}
+        handleSearchInput={handleSearchInput}
+      />
 
       <hr />
       {stories.hasError && <p>Something was worng ...</p>}
@@ -107,19 +128,23 @@ function App() {
         <List stories={stories.data} onRemoveItem={handleRemoveStory} />
       )}
       {/* <User user={user} /> */}
-    </div>
+    </StyledContainer>
   );
 }
+//** Custom hook */
 function useStorageState(key, initialState) {
+  const isMounted = useRef(false);
   const [value, setVaue] = useState(localStorage.getItem(key) || initialState);
   useEffect(() => {
-    localStorage.setItem(key, value);
+    if (!isMounted.current) {
+      isMounted.current = true;
+    } else {
+      console.log("A");
+      localStorage.setItem(key, value);
+    }
   }, [value]);
 
   return [value, setVaue];
-  // function handleChange(e) {
-  //   setVaue(e.target.value);
-  // }
 }
 //React controlled components
 
